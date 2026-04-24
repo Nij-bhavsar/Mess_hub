@@ -11,5 +11,8 @@ namespace MessManagementAPI.Models
         public string Password { get; set; }
 
         public string Role { get; set; }
+
+        // ✅ Added — stores the student's course
+        public string Course { get; set; } = "";
     }
 }

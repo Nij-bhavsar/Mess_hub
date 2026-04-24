@@ -1,118 +1,99 @@
-// Fallback service for attendance using localStorage
-// This allows the app to work offline and stores data locally
+const BASE = "http://localhost:5155/api/attendance";
 
 class AttendanceService {
   constructor() {
     this.storageKey = "attendanceRecords";
   }
 
-  // Get attendance records
+  // GET /api/attendance?date=X&studentId=Y
   async getAttendance(params = {}) {
     try {
-      // Try API first
-      const response = await fetch(
-        `http://localhost:5155/api/attendance?${new URLSearchParams(params)}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-      
-      if (response.ok) {
-        return await response.json();
-      }
-      throw new Error("API not available");
-    } catch (error) {
-      console.log("Using local storage for attendance");
-      // Fallback to localStorage
+      const query = new URLSearchParams();
+      if (params.date)      query.append("date",      params.date);
+      if (params.studentId) query.append("studentId", String(params.studentId));
+
+      const res = await fetch(`${BASE}?${query}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) return await res.json();
+      throw new Error("API error " + res.status);
+    } catch {
       return this.getLocalAttendance(params);
     }
   }
 
-  // Get specific attendance record
+  // GET /api/attendance/{studentId}/{date}
   async getAttendanceRecord(studentId, date) {
     try {
-      const response = await fetch(
-        `http://localhost:5155/api/attendance/${studentId}/${date}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" }
-        }
-      );
-      
-      if (response.ok) {
-        return await response.json();
-      }
-      throw new Error("API not available");
-    } catch (error) {
-      console.log("Using local storage for attendance record");
+      const res = await fetch(`${BASE}/${studentId}/${date}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) return await res.json();
+      throw new Error("API error " + res.status);
+    } catch {
       return this.getLocalAttendanceRecord(studentId, date);
     }
   }
 
-  // Create attendance record
+  // POST /api/attendance
   async createAttendance(data) {
     try {
-      const response = await fetch("http://localhost:5155/api/attendance", {
-        method: "POST",
+      const res = await fetch(BASE, {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body:    JSON.stringify(data),
       });
-      
-      if (response.ok) {
-        return await response.json();
-      }
-      throw new Error("API error: " + response.status);
-    } catch (error) {
-      console.log("Saving to local storage instead");
+
+      if (res.ok) return await res.json();
+      throw new Error("API error " + res.status);
+    } catch {
       return this.saveLocalAttendance(data);
     }
   }
 
-  // Update attendance record
+  // PUT /api/attendance/{id}
   async updateAttendance(id, data) {
     try {
-      const response = await fetch(`http://localhost:5155/api/attendance/${id}`, {
-        method: "PUT",
+      const res = await fetch(`${BASE}/${id}`, {
+        method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body:    JSON.stringify(data),
       });
-      
-      if (response.ok) {
-        return await response.json();
-      }
-      throw new Error("API error: " + response.status);
-    } catch (error) {
-      console.log("Updating local storage instead");
+
+      if (res.ok) return await res.json();
+      throw new Error("API error " + res.status);
+    } catch {
       return this.updateLocalAttendance(id, data);
     }
   }
 
-  // Local storage methods
+  // ── localStorage fallback ──
+
   getLocalAttendance(params = {}) {
     const records = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
-    
-    if (params.studentId) {
-      return records.filter(r => r.studentId === params.studentId);
-    }
-    if (params.date) {
-      return records.filter(r => r.date === params.date);
-    }
-    
-    return records;
+    return records.filter(r => {
+      const matchStudent = params.studentId
+        ? String(r.studentId) === String(params.studentId)
+        : true;
+      const matchDate = params.date
+        ? r.date === params.date
+        : true;
+      return matchStudent && matchDate;
+    });
   }
 
   getLocalAttendanceRecord(studentId, date) {
     const records = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
-    return records.find(r => r.studentId === studentId && r.date === date) || null;
+    return records.find(
+      r => String(r.studentId) === String(studentId) && r.date === date
+    ) || null;
   }
 
   saveLocalAttendance(data) {
-    const records = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
-    const newRecord = {
-      id: "local_" + Date.now(),
-      ...data
-    };
+    const records  = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
+    const newRecord = { id: "local_" + Date.now(), ...data };
     records.push(newRecord);
     localStorage.setItem(this.storageKey, JSON.stringify(records));
     return newRecord;
@@ -120,17 +101,15 @@ class AttendanceService {
 
   updateLocalAttendance(id, data) {
     const records = JSON.parse(localStorage.getItem(this.storageKey) || "[]");
-    const index = records.findIndex(r => r.id === id);
-    
+    const index   = records.findIndex(r => String(r.id) === String(id));
     if (index !== -1) {
       records[index] = { ...records[index], ...data };
       localStorage.setItem(this.storageKey, JSON.stringify(records));
       return records[index];
     }
-    
     return null;
   }
 }
 
-const attendanceServiceInstance = new AttendanceService();
-export default attendanceServiceInstance;
+const attendanceService = new AttendanceService();
+export default attendanceService;

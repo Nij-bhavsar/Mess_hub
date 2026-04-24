@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj": {}
+    "D:\\Nij Bhavsar\\Projects\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj": {}
   },
   "projects": {
-    "D:\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj": {
+    "D:\\Nij Bhavsar\\Projects\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj",
+        "projectUniqueName": "D:\\Nij Bhavsar\\Projects\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj",
         "projectName": "MessManagementAPI",
-        "projectPath": "D:\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj",
+        "projectPath": "D:\\Nij Bhavsar\\Projects\\mess-management-system\\backend\\MessManagementAPI\\MessManagementAPI.csproj",
         "packagesPath": "C:\\Users\\nijbh\\.nuget\\packages\\",
-        "outputPath": "D:\\mess-management-system\\backend\\MessManagementAPI\\obj\\",
+        "outputPath": "D:\\Nij Bhavsar\\Projects\\mess-management-system\\backend\\MessManagementAPI\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

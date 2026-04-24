@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import UnifiedNavbar from "../components/UnifiedNavbar";
+import { readAuthUser } from "../utils/authStorage";
 
 function StudentAttendance() {
   const [attendance, setAttendance] = useState(null);
@@ -9,8 +10,7 @@ function StudentAttendance() {
   const [loading, setLoading] = useState(true);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
 
-  const storedUser = localStorage.getItem("user");
-  const studentId = storedUser ? JSON.parse(storedUser).id : null;
+  const studentId = readAuthUser()?.id || null;
 
   useEffect(() => {
     fetchTodayAttendance();

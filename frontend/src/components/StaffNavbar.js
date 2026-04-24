@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { clearAuthUser } from "../utils/authStorage";
 
 function StaffNavbar() {
   const location = useLocation();
@@ -7,7 +8,7 @@ function StaffNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    clearAuthUser();
     setMenuOpen(false);
     navigate("/");
   };
@@ -25,7 +26,7 @@ function StaffNavbar() {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          <span className="logo-icon">🍽</span>
+          <img src="/logo.svg" alt="Mess Management" className="logo-icon" style={{ width: "40px", height: "40px", marginRight: "10px" }} />
           <span className="logo-text">Mess Management System</span>
         </Link>
 

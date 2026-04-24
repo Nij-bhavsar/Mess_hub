@@ -30,10 +30,12 @@ function Login() {
       const res  = await API.post("/auth/login", { email, password, role });
       const user = res.data;
 
-      // ── Role mismatch check ──
-      // Compare the role returned by the server with what the user selected.
-      // Both are normalised to lowercase so "Admin" === "admin" passes.
-      if (user.role?.toLowerCase() !== role.toLowerCase()) {
+      // Normalise role to lowercase for all comparisons
+      const userRole     = user.role?.toLowerCase() || "";
+      const selectedRole = role.toLowerCase();
+
+      // Role mismatch check — case-insensitive
+      if (userRole !== selectedRole) {
         setError(
           `Access denied. Your account role is "${user.role}", but you selected "${role}". Please choose the correct role.`
         );
@@ -41,12 +43,24 @@ function Login() {
         return;
       }
 
-      // Role matched — save user and redirect
+      // Clear ALL previous session data first, then save fresh user
+      // This prevents role bleed when switching between Admin/Staff/Student
+      Object.keys(localStorage).forEach(key => {
+        // Keep only this student's own receipts and requests — not other users'
+        if (key !== "user" && !key.startsWith("receipts_") && !key.startsWith("item_requests_")) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      // Remove any leftover browser-wide auth key from older builds
+      localStorage.removeItem("user");
+
       authLogin(user);
 
-      if (user.role === "Admin")        navigate("/admin");
-      else if (user.role === "Staff")   navigate("/staff");
-      else                              navigate("/student");
+      // Navigate based on role — case-insensitive
+      if (userRole === "admin")       navigate("/admin");
+      else if (userRole === "staff")  navigate("/staff");
+      else                            navigate("/student");
 
     } catch (err) {
       // Show the server error message if available, else a generic one
@@ -71,7 +85,7 @@ function Login() {
 
         {/* Logo */}
         <div className="logo-circle" style={{ margin: "0 auto var(--space-6)" }}>
-          🍽️
+          <img src="/logo_messhub.png" alt="Mess Management" className="logo-img" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         </div>
 
         <h2>Welcome back</h2>

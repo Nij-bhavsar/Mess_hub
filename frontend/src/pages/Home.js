@@ -6,7 +6,9 @@ function Home() {
 
       <div className="landing-card">
 
-        <img src="/l_3.png" alt="Mess Management System" className="logo-img" />
+        <div className="logo-circle" style={{ margin: "0 auto var(--space-6)" }}>
+          <img src="/logo_messhub.png" alt="Mess Management" className="logo-img" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        </div>
 
         <h1>Mess Management System</h1>
 

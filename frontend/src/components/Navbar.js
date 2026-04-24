@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {useState, useEffect} from "react";
+import { clearAuthUser, readAuthUser } from "../utils/authStorage";
 
 function Navbar() {
   const location = useLocation();
@@ -8,14 +9,9 @@ function Navbar() {
   const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        setUserRole(user.role ? user.role.toLowerCase() : "student");
-      } catch (e) {
-        setUserRole("student");
-      }
+    const user = readAuthUser();
+    if (user) {
+      setUserRole(user.role ? user.role.toLowerCase() : "student");
     } else {
       // Infer role from current path
       if (location.pathname.includes("/admin") || location.pathname.includes("/students")) {
@@ -29,7 +25,7 @@ function Navbar() {
   }, [location.pathname]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    clearAuthUser();
     setMenuOpen(false);
     navigate("/");
   };
@@ -67,7 +63,7 @@ function Navbar() {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          <span className="logo-icon">🍽</span>
+          <img src="/logo.svg" alt="Mess Management" className="logo-icon" style={{ width: "40px", height: "40px", marginRight: "10px" }} />
           <span className="logo-text">Mess Manager</span>
         </Link>
 

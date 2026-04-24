@@ -12,9 +12,10 @@ function ForgotPassword() {
   const [message,  setMessage]  = useState({ text: "", type: "" });
 
   const resetPassword = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
 
     // Field validation
-    if (!email.trim()) {
+    if (!normalizedEmail) {
       setMessage({ text: "Please enter your email address.", type: "error" });
       return;
     }
@@ -35,7 +36,10 @@ function ForgotPassword() {
       setLoading(true);
       setMessage({ text: "", type: "" });
 
-      await API.post("/auth/forgot-password", { email, password });
+      await API.post("/auth/forgot-password", {
+        email: normalizedEmail,
+        newPassword: password.trim(),
+      });
 
       setMessage({ text: "Password updated successfully! You can now log in with your new password.", type: "success" });
       setEmail("");
@@ -74,9 +78,9 @@ function ForgotPassword() {
         {/* Icon */}
         <div
           className="logo-circle"
-          style={{ margin: "0 auto var(--space-6)", background: "linear-gradient(135deg,#4F7EF7,#2D5BE3)" }}
+          style={{ margin: "0 auto var(--space-6)" }}
         >
-          🔑
+          <img src="/logo_messhub.png" alt="Reset Password" className="logo-img" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         </div>
 
         <h2>Reset Password</h2>

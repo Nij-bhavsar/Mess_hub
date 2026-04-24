@@ -14,5 +14,17 @@ namespace MessManagementAPI.Data
         public DbSet<Student> Students { get; set; }
 
         public DbSet<Menu> Menus { get; set; }
+
+        public DbSet<Attendance> Attendances { get; set; }
+
+        public DbSet<Payment>    Payments    { get; set; }
+
+        public DbSet<Leave>        Leaves        { get; set; }
+        
+        public DbSet<Notification> Notifications { get; set; }
+
+        public DbSet<FeedbackEntry>    Feedbacks      { get; set; }
+
+        public DbSet<ItemRequestEntry> ItemRequests   { get; set; }
     }
 }
