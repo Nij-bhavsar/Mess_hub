@@ -23,6 +23,18 @@ function formatCurrency(amount) {
   return `₹${Number(amount).toLocaleString("en-IN")}`;
 }
 
+function isPaidForCurrentMonth(receipt) {
+  const paidAt = receipt?.paidAt || receipt?.date;
+  if (!paidAt) return false;
+
+  const paidDate = new Date(paidAt);
+  if (Number.isNaN(paidDate.getTime())) return false;
+
+  const now = new Date();
+  return paidDate.getFullYear() === now.getFullYear()
+    && paidDate.getMonth() === now.getMonth();
+}
+
 /* Load Razorpay script dynamically */
 function loadRazorpay() {
   return new Promise(resolve => {
@@ -146,6 +158,7 @@ function Invoice() {
   const plan  = MESS_PLANS.find(p => p.id === selectedPlan);
   const gst   = Math.round(plan.amount * 0.05);
   const total = plan.amount + gst;
+  const currentMonthPayment = receipts.find(isPaidForCurrentMonth);
 
   /* Load past payments from backend */
   useEffect(() => {
@@ -164,8 +177,9 @@ function Invoice() {
 
   /* Save payment to backend after Razorpay success */
   const savePayment = async (receiptData) => {
+    let res;
     try {
-      const res = await fetch("http://localhost:5155/api/payment", {
+      res = await fetch("http://localhost:5155/api/payment", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -179,11 +193,16 @@ function Invoice() {
           receiptId:   receiptData.receiptId,
         }),
       });
-      if (res.ok) {
-        const saved = await res.json();
-        return { ...receiptData, id: saved.id };
-      }
     } catch {}
+
+    if (res) {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Payment could not be recorded.");
+      }
+      return { ...receiptData, id: data.id };
+    }
+
     // fallback to localStorage
     const stored = JSON.parse(localStorage.getItem(`receipts_${studentId}`) || "[]");
     stored.unshift(receiptData);
@@ -194,6 +213,14 @@ function Invoice() {
   /* Initiate Razorpay payment */
   const handlePay = async () => {
     setError("");
+
+    if (currentMonthPayment) {
+      const paidMonth = new Date(currentMonthPayment.paidAt || currentMonthPayment.date)
+        .toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+      setError(`Fees for ${paidMonth} are already paid. You cannot pay again for the same month.`);
+      return;
+    }
+
     setProcessing(true);
 
     const loaded = await loadRazorpay();
@@ -255,10 +282,15 @@ function Invoice() {
           razorpaySignature:   response.razorpay_signature,
         };
 
-        const saved = await savePayment(receipt);
-        setReceipts(prev => [saved, ...prev]);
-        setProcessing(false);
-        setShowReceipt(saved);
+        try {
+          const saved = await savePayment(receipt);
+          setReceipts(prev => [saved, ...prev]);
+          setShowReceipt(saved);
+        } catch (err) {
+          setError(err.message || "Payment completed, but the receipt could not be saved.");
+        } finally {
+          setProcessing(false);
+        }
       },
 
       /* Called when user closes payment modal */
@@ -383,19 +415,25 @@ function Invoice() {
               </span>
             </div>
 
+            {currentMonthPayment && (
+              <div className="message error" style={{ marginBottom:"0" }}>
+                Fees for this month are already paid. You cannot pay again for the same month.
+              </div>
+            )}
+
             {/* Pay button */}
             <button
               className="auth-btn"
               onClick={handlePay}
-              disabled={processing}
-              style={{ width:"100%", fontSize:"var(--text-base)", padding:"var(--space-4)", opacity: processing ? 0.8 : 1 }}
+              disabled={processing || !!currentMonthPayment}
+              style={{ width:"100%", fontSize:"var(--text-base)", padding:"var(--space-4)", opacity: processing || currentMonthPayment ? 0.8 : 1 }}
             >
               {processing ? (
                 <span style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"var(--space-2)" }}>
                   <span style={{ width:"18px", height:"18px", border:"2px solid rgba(255,255,255,0.4)", borderTopColor:"white", borderRadius:"50%", display:"inline-block", animation:"spin 0.8s linear infinite" }} />
                   Opening payment window…
                 </span>
-              ) : `Pay ${formatCurrency(total)} →`}
+              ) : currentMonthPayment ? "This month is already paid" : `Pay ${formatCurrency(total)} →`}
             </button>
           </div>
 

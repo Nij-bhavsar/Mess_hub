@@ -3,12 +3,45 @@ import API from "../services/api";
 import UnifiedNavbar from "../components/UnifiedNavbar";
 import { readAuthUser } from "../utils/authStorage";
 
+function getMonthValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getRecordMonth(record) {
+  if (!record?.date) return "";
+  return String(record.date).slice(0, 7);
+}
+
+function formatMonth(monthValue) {
+  if (!monthValue) return "Selected Month";
+  const [year, month] = monthValue.split("-");
+  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function getAvailableMonths(records) {
+  const currentMonth = getMonthValue();
+  const months = new Set([currentMonth]);
+
+  records.forEach(record => {
+    const month = getRecordMonth(record);
+    if (month) months.add(month);
+  });
+
+  return Array.from(months).sort((a, b) => b.localeCompare(a));
+}
+
 function StudentAttendance() {
   const [attendance, setAttendance] = useState(null);
   const [message, setMessage] = useState("");
   const [todayStatus, setTodayStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(getMonthValue());
 
   const studentId = readAuthUser()?.id || null;
 
@@ -47,6 +80,15 @@ function StudentAttendance() {
     }
   };
 
+  const monthlyAttendance = attendanceHistory.filter(
+    record => getRecordMonth(record) === selectedMonth
+  );
+  const availableMonths = getAvailableMonths(attendanceHistory);
+
+  const getMonthlyCount = (status) => {
+    return monthlyAttendance.filter(a => a.status === status).length;
+  };
+
   const markAttendance = async (status) => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -81,9 +123,9 @@ function StudentAttendance() {
   };
 
   const getAttendancePercentage = () => {
-    if (attendanceHistory.length === 0) return 0;
-    const presentCount = attendanceHistory.filter(a => a.status === "Present").length;
-    return Math.round((presentCount / attendanceHistory.length) * 100);
+    if (monthlyAttendance.length === 0) return 0;
+    const presentCount = monthlyAttendance.filter(a => a.status === "Present").length;
+    return Math.round((presentCount / monthlyAttendance.length) * 100);
   };
 
   return (
@@ -133,18 +175,50 @@ function StudentAttendance() {
 
           {/* Attendance Summary */}
           <div className="attendance-summary">
-            <h2>Monthly Summary</h2>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"var(--space-4)", marginBottom:"var(--space-4)", flexWrap:"wrap" }}>
+              <div>
+                <h2 style={{ marginBottom:"4px" }}>Monthly Summary</h2>
+                <div style={{ fontSize:"var(--text-sm)", color:"var(--color-text-tertiary)", fontWeight:"var(--font-medium)" }}>
+                  {formatMonth(selectedMonth)}
+                </div>
+              </div>
+              <label style={{ display:"flex", flexDirection:"column", gap:"var(--space-1)", minWidth:"190px" }}>
+                <span style={{ fontSize:"var(--text-xs)", color:"var(--color-text-tertiary)", fontWeight:"var(--font-bold)", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                  View Month
+                </span>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  style={{
+                    padding:"var(--space-3) var(--space-4)",
+                    border:"1px solid var(--color-border)",
+                    borderRadius:"var(--radius-md)",
+                    background:"var(--color-neutral-50)",
+                    color:"var(--color-text-primary)",
+                    fontWeight:"var(--font-semibold)",
+                    cursor:"pointer",
+                  }}
+                  aria-label="View attendance month wise"
+                >
+                  {availableMonths.map(month => (
+                    <option key={month} value={month}>
+                      {formatMonth(month)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="summary-stats">
               <div className="stat-box">
-                <div className="stat-number">{attendanceHistory.filter(a => a.status === "Present").length}</div>
+                <div className="stat-number">{getMonthlyCount("Present")}</div>
                 <div className="stat-label">Present</div>
               </div>
               <div className="stat-box">
-                <div className="stat-number">{attendanceHistory.filter(a => a.status === "Absent").length}</div>
+                <div className="stat-number">{getMonthlyCount("Absent")}</div>
                 <div className="stat-label">Absent</div>
               </div>
               <div className="stat-box">
-                <div className="stat-number">{attendanceHistory.filter(a => a.status === "Leave").length}</div>
+                <div className="stat-number">{getMonthlyCount("Leave")}</div>
                 <div className="stat-label">Leave</div>
               </div>
               <div className="stat-box percentage">
@@ -157,7 +231,17 @@ function StudentAttendance() {
 
         {/* Attendance History */}
         <div className="attendance-history">
-          <h2>Attendance History</h2>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:"var(--space-4)", marginBottom:"var(--space-4)", flexWrap:"wrap" }}>
+            <div>
+              <h2 style={{ marginBottom:"4px" }}>Attendance History</h2>
+              <div style={{ fontSize:"var(--text-sm)", color:"var(--color-text-tertiary)" }}>
+                Showing {formatMonth(selectedMonth)} records
+              </div>
+            </div>
+            <div style={{ fontSize:"var(--text-sm)", color:"var(--color-text-secondary)", fontWeight:"var(--font-semibold)" }}>
+              Total: {monthlyAttendance.length}
+            </div>
+          </div>
           <table className="table">
             <thead>
               <tr>
@@ -167,12 +251,12 @@ function StudentAttendance() {
               </tr>
             </thead>
             <tbody>
-              {attendanceHistory.length === 0 ? (
+              {monthlyAttendance.length === 0 ? (
                 <tr>
-                  <td colSpan="3" className="no-data">No attendance records</td>
+                  <td colSpan="3" className="no-data">No attendance records for {formatMonth(selectedMonth)}</td>
                 </tr>
               ) : (
-                attendanceHistory.map((record, idx) => (
+                monthlyAttendance.map((record, idx) => (
                   <tr key={idx}>
                     <td>{new Date(record.date).toLocaleDateString()}</td>
                     <td>

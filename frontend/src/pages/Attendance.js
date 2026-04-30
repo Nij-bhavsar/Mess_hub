@@ -14,6 +14,26 @@ function getColor(id) {
   return AVATAR_COLORS[id % AVATAR_COLORS.length];
 }
 
+function getMonthValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getRecordMonth(record) {
+  if (!record?.date) return "";
+  return String(record.date).slice(0, 7);
+}
+
+function formatMonth(monthValue) {
+  if (!monthValue) return "Selected Month";
+  const [year, month] = monthValue.split("-");
+  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 
 /* ══════════════════════════════════════════════════════
    ADMIN / STAFF VIEW
@@ -24,6 +44,8 @@ function AdminStaffView() {
   const [selectedDate,        setSelectedDate]        = useState(
     () => new Date().toISOString().split("T")[0]
   );
+  const [viewMode,            setViewMode]            = useState("daily");
+  const [selectedMonth,       setSelectedMonth]       = useState(getMonthValue());
   const [loading,             setLoading]             = useState(false);
   const [message,             setMessage]             = useState({ text: "", type: "" });
   const [markingId,           setMarkingId]           = useState(null);
@@ -40,7 +62,7 @@ function AdminStaffView() {
     try {
       const [studentsRes, attendanceData] = await Promise.all([
         API.get("/student").catch(() => ({ data: [] })),
-        attendanceService.getAttendance({ date: selectedDate }).catch(() => []),
+        attendanceService.getAttendance(viewMode === "monthly" ? {} : { date: selectedDate }).catch(() => []),
       ]);
       setStudents(Array.isArray(studentsRes.data) ? studentsRes.data : []);
       setAttendance(Array.isArray(attendanceData) ? attendanceData : []);
@@ -49,7 +71,7 @@ function AdminStaffView() {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, viewMode]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -87,17 +109,38 @@ function AdminStaffView() {
   };
 
   const stats = {
-    present: attendance.filter((a) => a.status === "Present").length,
-    absent:  attendance.filter((a) => a.status === "Absent").length,
+    present: attendance.filter((a) => a.status === "Present" && (viewMode === "daily" || getRecordMonth(a) === selectedMonth)).length,
+    absent:  attendance.filter((a) => a.status === "Absent" && (viewMode === "daily" || getRecordMonth(a) === selectedMonth)).length,
+    leave:   attendance.filter((a) => a.status === "Leave" && (viewMode === "daily" || getRecordMonth(a) === selectedMonth)).length,
+  };
+
+  const monthlyAttendance = attendance.filter((record) => getRecordMonth(record) === selectedMonth);
+
+  const getStudentMonthlyStats = (studentId) => {
+    const records = monthlyAttendance.filter((record) => String(record.studentId) === String(studentId));
+    const present = records.filter((record) => record.status === "Present").length;
+    const absent = records.filter((record) => record.status === "Absent").length;
+    const leave = records.filter((record) => record.status === "Leave").length;
+    const total = present + absent + leave;
+
+    return {
+      present,
+      absent,
+      leave,
+      total,
+      percentage: total > 0 ? Math.round((present / total) * 100) : 0,
+    };
   };
 
   const filtered = students.filter((s) => {
     const matchSearch = s.name?.toLowerCase().includes(search.toLowerCase());
     const status      = getStudentStatus(s.id);
+    const monthStats  = getStudentMonthlyStats(s.id);
     const matchFilter =
       filterStatus === "all" ||
-      (filterStatus === "unmarked" && !status) ||
-      status?.toLowerCase() === filterStatus;
+      (viewMode === "monthly"
+        ? (filterStatus === "unmarked" ? monthStats.total === 0 : monthStats[filterStatus] > 0)
+        : ((filterStatus === "unmarked" && !status) || status?.toLowerCase() === filterStatus));
     return matchSearch && matchFilter;
   });
 
@@ -113,17 +156,33 @@ function AdminStaffView() {
       {/* Date + Stats */}
       <div style={{ display: "flex", alignItems: "stretch", gap: "var(--space-4)", marginBottom: "var(--space-6)", flexWrap: "wrap" }}>
 
+        {/* View mode */}
+        <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", padding: "var(--space-5) var(--space-6)", display: "flex", alignItems: "center", gap: "var(--space-3)", boxShadow: "var(--shadow-xs)" }}>
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-secondary)" }}>View</label>
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value)}
+            style={{ border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-sm)", background: "var(--color-neutral-50)", color: "var(--color-text-primary)", outline: "none", cursor: "pointer", fontWeight: "var(--font-semibold)" }}
+            aria-label="Select attendance view"
+          >
+            <option value="daily">Daily Attendance</option>
+            <option value="monthly">Monthly Attendance</option>
+          </select>
+        </div>
+
         {/* Date picker */}
         <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", padding: "var(--space-5) var(--space-6)", display: "flex", alignItems: "center", gap: "var(--space-3)", boxShadow: "var(--shadow-xs)" }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--color-brand-primary)" strokeWidth="1.5">
             <rect x="1" y="3" width="14" height="12" rx="2" />
             <path d="M1 7h14M5 1v4M11 1v4" strokeLinecap="round" />
           </svg>
-          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-secondary)" }}>Date</label>
+          <label style={{ fontSize: "var(--text-sm)", fontWeight: "var(--font-semibold)", color: "var(--color-text-secondary)" }}>
+            {viewMode === "monthly" ? "Month" : "Date"}
+          </label>
           <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            type={viewMode === "monthly" ? "month" : "date"}
+            value={viewMode === "monthly" ? selectedMonth : selectedDate}
+            onChange={(e) => viewMode === "monthly" ? setSelectedMonth(e.target.value) : setSelectedDate(e.target.value)}
             style={{ border: "1.5px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-sm)", background: "var(--color-neutral-50)", color: "var(--color-text-primary)", outline: "none", cursor: "pointer" }}
           />
         </div>
@@ -132,7 +191,8 @@ function AdminStaffView() {
         {[
           { label: "Present", value: stats.present,   color: "var(--color-success)"     },
           { label: "Absent",  value: stats.absent,    color: "var(--color-danger)"      },
-          { label: "Total",   value: students.length, color: "var(--color-accent-blue)" },
+          ...(viewMode === "monthly" ? [{ label: "Leave", value: stats.leave, color: "var(--color-warning)" }] : []),
+          { label: "Total",   value: viewMode === "monthly" ? monthlyAttendance.length : students.length, color: "var(--color-accent-blue)" },
         ].map((s) => (
           <div key={s.label} style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", padding: "var(--space-4) var(--space-6)", display: "flex", flexDirection: "column", justifyContent: "center", boxShadow: "var(--shadow-xs)", minWidth: "90px" }}>
             <div style={{ fontSize: "1.75rem", fontWeight: "var(--font-bold)", color: s.color, lineHeight: 1.1 }}>{s.value}</div>
@@ -144,7 +204,7 @@ function AdminStaffView() {
       {/* Toolbar */}
       <div className="grid-toolbar">
         <h2 className="grid-toolbar-title">
-          Students <span className="grid-count-badge">{filtered.length}</span>
+          {viewMode === "monthly" ? `${formatMonth(selectedMonth)} Attendance` : "Students"} <span className="grid-count-badge">{filtered.length}</span>
         </h2>
         <div className="grid-search-wrap">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -185,6 +245,7 @@ function AdminStaffView() {
         <div className="person-grid">
           {filtered.map((student) => {
             const status    = getStudentStatus(student.id);
+            const monthStats = getStudentMonthlyStats(student.id);
             const color     = getColor(student.id);
             const isMarking = markingId === student.id;
 
@@ -201,11 +262,25 @@ function AdminStaffView() {
                       <rect x="1" y="3" width="12" height="9" rx="1.5" />
                       <path d="M1 6h12M4.5 3V1.5M9.5 3V1.5" strokeLinecap="round" />
                     </svg>
-                    {selectedDate}
+                    {viewMode === "monthly" ? formatMonth(selectedMonth) : selectedDate}
                   </div>
                 </div>
 
-                {/* P / A / L buttons */}
+                {viewMode === "monthly" ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--space-2)", marginBottom: "var(--space-4)", width: "100%" }}>
+                    {[
+                      { label: "P", value: monthStats.present, color: "var(--color-success)" },
+                      { label: "A", value: monthStats.absent, color: "var(--color-danger)" },
+                      { label: "L", value: monthStats.leave, color: "var(--color-warning)" },
+                      { label: "%", value: monthStats.percentage, color: "var(--color-accent-blue)", suffix: "%" },
+                    ].map((item) => (
+                      <div key={item.label} style={{ background: "var(--color-neutral-50)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "var(--space-2)", textAlign: "center" }}>
+                        <div style={{ fontSize: "var(--text-base)", fontWeight: "var(--font-bold)", color: item.color, lineHeight: 1 }}>{item.value}{item.suffix || ""}</div>
+                        <div style={{ fontSize: "10px", color: "var(--color-text-tertiary)", fontWeight: "var(--font-bold)", marginTop: "4px" }}>{item.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
                   {[
                     { label: "P", status: "Present" },
@@ -223,10 +298,11 @@ function AdminStaffView() {
                     </button>
                   ))}
                 </div>
+                )}
 
                 <div className="person-card-footer">
                   <span className={`person-status-pill ${STATUS_PILL[status] || "sp-unmarked"}`}>
-                    {status || "Not Marked"}
+                    {viewMode === "monthly" ? `${monthStats.total} Days` : (status || "Not Marked")}
                   </span>
                 </div>
               </div>

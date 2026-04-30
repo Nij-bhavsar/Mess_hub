@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MessManagementAPI.Data;
 using MessManagementAPI.Models;
+using System.Globalization;
 
 namespace MessManagementAPI.Controllers
 {
@@ -25,6 +26,36 @@ namespace MessManagementAPI.Controllers
         public PaymentController(AppDbContext context)
         {
             _context = context;
+        }
+
+        private static DateTime GetPaymentDate(string? paidAt)
+        {
+            if (DateTimeOffset.TryParse(
+                    paidAt,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal,
+                    out var parsedOffset))
+            {
+                return parsedOffset.LocalDateTime;
+            }
+
+            if (DateTime.TryParse(
+                    paidAt,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal,
+                    out var parsedDate))
+            {
+                return parsedDate;
+            }
+
+            return DateTime.Now;
+        }
+
+        private static bool IsSameMonth(string paidAt, DateTime paymentDate)
+        {
+            var existingDate = GetPaymentDate(paidAt);
+            return existingDate.Year == paymentDate.Year
+                && existingDate.Month == paymentDate.Month;
         }
 
         // GET /api/payment — admin sees all payments
@@ -89,6 +120,20 @@ namespace MessManagementAPI.Controllers
             if (string.IsNullOrWhiteSpace(dto.Plan))
                 return BadRequest(new { message = "Plan is required." });
 
+            var paymentDate = GetPaymentDate(dto.PaidAt);
+            var alreadyPaidForMonth = _context.Payments
+                .Where(p => p.StudentId == dto.StudentId && p.Status == "Paid")
+                .AsEnumerable()
+                .Any(p => IsSameMonth(p.PaidAt, paymentDate));
+
+            if (alreadyPaidForMonth)
+            {
+                return Conflict(new
+                {
+                    message = $"Fees for {paymentDate:MMMM yyyy} have already been paid."
+                });
+            }
+
             var payment = new Payment
             {
                 StudentId   = dto.StudentId,
@@ -97,11 +142,23 @@ namespace MessManagementAPI.Controllers
                 Amount      = dto.Amount,
                 Method      = dto.Method,
                 Status      = "Paid",
-                PaidAt      = dto.PaidAt ?? DateTime.Now.ToString("o"),
+                PaidAt      = string.IsNullOrWhiteSpace(dto.PaidAt) ? paymentDate.ToString("o") : dto.PaidAt,
                 ReceiptId   = dto.ReceiptId ?? "RCP" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             };
 
             _context.Payments.Add(payment);
+
+            _context.Notifications.Add(new Notification
+            {
+                UserId    = 0,
+                Title     = "Fees Payment Received",
+                Message   = $"{payment.StudentName} paid Rs. {payment.Amount.ToString("N0", CultureInfo.GetCultureInfo("en-IN"))} for {payment.Plan}. Receipt: {payment.ReceiptId}.",
+                Type      = "success",
+                IsRead    = false,
+                CreatedAt = DateTime.Now.ToString("o"),
+                Role      = "admin",
+            });
+
             _context.SaveChanges();
 
             return Ok(new
