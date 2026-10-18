@@ -103,22 +103,52 @@ function Notifications() {
   const isAdmin    = userRole === "admin";
 
   const [notifications, setNotifications] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [actingOnRequest, setActingOnRequest] = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [filter,        setFilter]        = useState("all");
 
   const fetchNotifications = useCallback(async () => {
-    setLoading(true);
     try {
-      const res = await fetch(`${BASE}?userId=${userId}&role=${userRole}`);
-      if (res.ok) {
-        const data = await res.json();
+      const params = new URLSearchParams({ userId: String(userId), role: userRole });
+      const requests = isAdmin
+        ? await Promise.all([
+            fetch("http://localhost:5155/api/leave?status=Pending", { cache: "no-store" }),
+            fetch("http://localhost:5155/api/itemrequest?status=Pending", { cache: "no-store" }),
+          ])
+        : [];
+      const [notificationRes, ...requestResponses] = await Promise.all([
+        fetch(`${BASE}?${params}`, { cache: "no-store" }),
+        ...requests,
+      ]);
+      if (notificationRes.ok) {
+        const data = await notificationRes.json();
         setNotifications(Array.isArray(data) ? data : []);
       }
-    } catch { setNotifications([]); }
-    finally { setLoading(false); }
-  }, [userId, userRole]);
+      if (isAdmin) {
+        const [leaveRes, itemRequestRes] = requestResponses;
+        const [leaves, itemRequests] = await Promise.all([
+          leaveRes?.ok ? leaveRes.json() : [],
+          itemRequestRes?.ok ? itemRequestRes.json() : [],
+        ]);
+        setPendingRequests([
+          ...(Array.isArray(leaves) ? leaves.map(request => ({ ...request, requestKind: "leave" })) : []),
+          ...(Array.isArray(itemRequests) ? itemRequests.map(request => ({ ...request, requestKind: "item" })) : []),
+        ]);
+      }
+    } catch {
+      setNotifications([]);
+      if (isAdmin) setPendingRequests([]);
+    } finally { setLoading(false); }
+  }, [userId, userRole, isAdmin]);
 
-  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+  useEffect(() => {
+    fetchNotifications();
+    // Keep the notification list current while the page is open. Leave requests
+    // are created by the API, so there is no client-side event to trigger a refresh.
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const markRead = async (id) => {
     try {
@@ -147,13 +177,50 @@ function Notifications() {
     }
   };
 
+  const handleRequestAction = async (request, status) => {
+    const key = `${request.requestKind}-${request.id}`;
+    setActingOnRequest(key);
+    try {
+      const endpoint = request.requestKind === "leave" ? "leave" : "itemrequest";
+      const res = await fetch(`http://localhost:5155/api/${endpoint}/${request.id}/action`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, adminRemark: "" }),
+      });
+      if (!res.ok) throw new Error("Request action failed");
+      await fetchNotifications();
+    } catch {
+      window.alert("Could not update this request. Please try again.");
+    } finally {
+      setActingOnRequest(null);
+    }
+  };
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  const requestNotifications = pendingRequests.map(request => {
+    const isLeave = request.requestKind === "leave";
+    return {
+      ...request,
+      id: `${request.requestKind}-${request.id}`,
+      requestId: request.id,
+      isRequest: true,
+      isRead: false,
+      type: "info",
+      title: isLeave ? "New Leave Request" : "New Item Request",
+      message: isLeave
+        ? `${request.userName || "User"} (${request.userRole || "student"}) · ${request.leaveType || "Leave"} from ${request.fromDate} to ${request.toDate}. ${request.reason || ""}`
+        : `${request.userName || "User"} (${request.userRole || "student"}) requested ${request.itemName || "an item"} · ${request.category || "Request"} · ${request.priority || "Medium"} priority. ${request.note || ""}`,
+      createdAt: request.appliedAt || request.createdAt,
+    };
+  });
+  const allNotifications = [...notifications, ...requestNotifications]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const filtered = filter === "all"
-    ? notifications
+    ? allNotifications
     : filter === "unread"
-      ? notifications.filter(n => !n.isRead)
-      : notifications.filter(n => n.type === filter);
+      ? allNotifications.filter(n => !n.isRead)
+      : allNotifications.filter(n => n.type === filter);
 
   return (
     <div className="dashboard">
@@ -215,14 +282,14 @@ function Notifications() {
               return (
                 <div
                   key={n.id}
-                  onClick={() => !n.isRead && markRead(n.id)}
+                  onClick={() => !n.isRequest && !n.isRead && markRead(n.id)}
                   style={{
                     background:    n.isRead ? "var(--color-surface)" : "#FAFAFA",
                     border:        `1px solid ${n.isRead ? "var(--color-border)" : tc.border}`,
                     borderRadius:  "var(--radius-xl)",
                     padding:       "var(--space-5)",
                     boxShadow:     n.isRead ? "var(--shadow-xs)" : "var(--shadow-sm)",
-                    cursor:        n.isRead ? "default" : "pointer",
+                    cursor:        n.isRead || n.isRequest ? "default" : "pointer",
                     position:      "relative",
                     overflow:      "hidden",
                     display:       "flex",
@@ -260,16 +327,23 @@ function Notifications() {
                   </div>
 
                   {/* Delete button */}
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
-                    className="person-icon-btn delete-icon"
-                    style={{ flexShrink:0 }}
-                    title="Delete notification"
-                  >
-                    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 3l8 8M11 3l-8 8"/>
-                    </svg>
-                  </button>
+                  {n.isRequest ? (
+                    <div style={{ display:"flex", gap:"var(--space-2)", flexShrink:0 }}>
+                      <button disabled={actingOnRequest === `${n.requestKind}-${n.requestId}`} onClick={e => { e.stopPropagation(); handleRequestAction({ ...n, id: n.requestId }, "Approved"); }} className="auth-btn" style={{ padding:"var(--space-2) var(--space-3)" }}>Approve</button>
+                      <button disabled={actingOnRequest === `${n.requestKind}-${n.requestId}`} onClick={e => { e.stopPropagation(); handleRequestAction({ ...n, id: n.requestId }, "Rejected"); }} className="person-icon-btn delete-icon" style={{ width:"auto", padding:"0 var(--space-3)" }}>Reject</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
+                      className="person-icon-btn delete-icon"
+                      style={{ flexShrink:0 }}
+                      title="Delete notification"
+                    >
+                      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 3l8 8M11 3l-8 8"/>
+                      </svg>
+                    </button>
+                  )}
                 </div>
               );
             })}

@@ -8,28 +8,57 @@ function UnifiedNavbar() {
   const { user, logout } = useAuth();
   const [menuOpen,      setMenuOpen]      = useState(false);
   const [unreadCount,   setUnreadCount]   = useState(0);
+  const [newNotification, setNewNotification] = useState(null);
   const [showLogoutPopup, setShowLogoutPopup] = useState(false);
   const logoutPopupRef = useRef(null);
+  const previousUnreadCount = useRef(null);
 
   const role   = user?.role?.toLowerCase() || "";
   const userId = user?.id || 0;
 
   // Fetch unread notification count
   useEffect(() => {
+    let active = true;
     const fetchCount = async () => {
       try {
-        const res = await fetch(`http://localhost:5155/api/notification/unread-count?userId=${userId}&role=${role}`);
+        const params = new URLSearchParams({ userId: String(userId), role });
+        const res = await fetch(`http://localhost:5155/api/notification/unread-count?${params}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          setUnreadCount(data.count || 0);
+          if (!active) return;
+          const nextCount = data.count || 0;
+          const previousCount = previousUnreadCount.current;
+          previousUnreadCount.current = nextCount;
+          setUnreadCount(nextCount);
+
+          if (previousCount !== null && nextCount > previousCount) {
+            const notificationParams = new URLSearchParams({ userId: String(userId), role });
+            const notificationRes = await fetch(`http://localhost:5155/api/notification?${notificationParams}`, { cache: "no-store" });
+            if (notificationRes.ok && active) {
+              const notifications = await notificationRes.json();
+              const newestUnread = notifications.find(notification => !notification.isRead);
+              if (newestUnread) setNewNotification(newestUnread);
+            }
+          }
         }
       } catch {}
     };
     if (userId) {
       fetchCount();
-      const interval = setInterval(fetchCount, 30000); // refresh every 30s
-      return () => clearInterval(interval);
+      const interval = setInterval(fetchCount, 5000);
+      const refreshWhenVisible = () => {
+        if (document.visibilityState === "visible") fetchCount();
+      };
+      window.addEventListener("focus", fetchCount);
+      document.addEventListener("visibilitychange", refreshWhenVisible);
+      return () => {
+        active = false;
+        clearInterval(interval);
+        window.removeEventListener("focus", fetchCount);
+        document.removeEventListener("visibilitychange", refreshWhenVisible);
+      };
     }
+    return () => { active = false; };
   }, [userId, role]);
 
   useEffect(() => {
@@ -234,6 +263,16 @@ function UnifiedNavbar() {
         </div>
 
       </div>
+      {newNotification && (
+        <div role="status" style={{ position:"fixed", top:"76px", right:"20px", zIndex:1200, width:"min(360px, calc(100vw - 40px))", borderRadius:"14px", background:"var(--color-surface)", border:"1px solid var(--color-border)", borderLeft:"4px solid var(--color-danger)", boxShadow:"var(--shadow-lg)", animation:"fadeIn 0.2s ease" }}>
+          <Link to="/notifications" onClick={() => setNewNotification(null)} style={{ display:"block", padding:"14px 38px 14px 16px", color:"var(--color-text-primary)", textDecoration:"none" }}>
+            <div style={{ fontSize:"var(--text-xs)", color:"var(--color-danger)", fontWeight:"var(--font-bold)", textTransform:"uppercase", marginBottom:"4px" }}>New notification</div>
+            <div style={{ fontSize:"var(--text-sm)", fontWeight:"var(--font-bold)", marginBottom:"3px" }}>{newNotification.title || "Notification"}</div>
+            <div style={{ fontSize:"var(--text-xs)", color:"var(--color-text-secondary)", lineHeight:1.4 }}>{newNotification.message}</div>
+          </Link>
+          <button type="button" aria-label="Dismiss notification alert" onClick={() => setNewNotification(null)} style={{ position:"absolute", top:"8px", right:"10px", border:0, background:"transparent", color:"var(--color-text-tertiary)", fontSize:"18px", cursor:"pointer" }}>×</button>
+        </div>
+      )}
     </nav>
   );
 }

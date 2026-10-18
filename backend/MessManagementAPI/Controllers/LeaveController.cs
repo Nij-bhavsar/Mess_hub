@@ -96,22 +96,48 @@ namespace MessManagementAPI.Controllers
                 UpdatedAt   = DateTime.Now.ToString("o"),
             };
 
+            using var transaction = _context.Database.BeginTransaction();
             _context.Leaves.Add(leave);
+            _context.SaveChanges();
 
-            // Notify all admins about the new leave request
-            var adminNotif = new Notification
+            // Target each admin account directly so the notification query and
+            // per-user read state cannot hide a role broadcast from an admin.
+            var admins = _context.Users
+                .Where(user => user.Role.ToLower() == "admin")
+                .Select(user => user.Id)
+                .ToList();
+            var notificationMessage = $"{leave.UserName} ({leave.UserRole}) applied for {leave.LeaveType} from {leave.FromDate} to {leave.ToDate}. Reason: {leave.Reason}";
+            var createdAt = DateTime.Now.ToString("o");
+
+            if (admins.Count == 0)
             {
-                UserId    = 0,
-                Title     = "New Leave Request",
-                Message   = $"{dto.UserName} ({dto.UserRole}) has applied for leave from {dto.FromDate} to {dto.ToDate}.",
-                Type      = "info",
-                IsRead    = false,
-                CreatedAt = DateTime.Now.ToString("o"),
-                Role      = "admin",
-            };
-            _context.Notifications.Add(adminNotif);
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = 0,
+                    Title = "New Leave Request",
+                    Message = notificationMessage,
+                    Type = "info",
+                    IsRead = false,
+                    CreatedAt = createdAt,
+                    Role = "admin",
+                });
+            }
+            else
+            {
+                _context.Notifications.AddRange(admins.Select(adminId => new Notification
+                {
+                    UserId = adminId,
+                    Title = "New Leave Request",
+                    Message = notificationMessage,
+                    Type = "info",
+                    IsRead = false,
+                    CreatedAt = createdAt,
+                    Role = "admin",
+                }));
+            }
 
             _context.SaveChanges();
+            transaction.Commit();
 
             return Ok(new {
                 message   = "Leave application submitted successfully.",

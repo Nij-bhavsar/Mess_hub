@@ -37,7 +37,8 @@ namespace MessManagementAPI.Controllers
                 // Return notifications for this specific user OR broadcast to their role OR broadcast to all
                 query = query.Where(n =>
                     n.UserId == userId.Value ||
-                    n.UserId == 0 && (n.Role == role.ToLower() || n.Role == "")
+                    n.UserId == 0 && (n.Role.ToLower() == role.ToLower() || n.Role == "") ||
+                    role.ToLower() == "admin" && n.Role.ToLower() == "admin"
                 );
             }
             else if (userId.HasValue)
@@ -84,7 +85,8 @@ namespace MessManagementAPI.Controllers
             if (userId.HasValue && !string.IsNullOrWhiteSpace(role))
             {
                 query = query.Where(n =>
-                    n.UserId == userId.Value || (n.UserId == 0 && (n.Role == role.ToLower() || n.Role == ""))
+                    n.UserId == userId.Value || (n.UserId == 0 && (n.Role.ToLower() == role.ToLower() || n.Role == "")) ||
+                    role.ToLower() == "admin" && n.Role.ToLower() == "admin"
                 );
             }
             else if (userId.HasValue)
@@ -130,7 +132,8 @@ namespace MessManagementAPI.Controllers
         {
             var notifs = _context.Notifications
                 .Where(n => n.UserId == userId ||
-                    (n.UserId == 0 && (string.IsNullOrWhiteSpace(role) || n.Role == role.ToLower() || n.Role == "")))
+                    (n.UserId == 0 && (string.IsNullOrWhiteSpace(role) || n.Role.ToLower() == role.ToLower() || n.Role == "")) ||
+                    (!string.IsNullOrWhiteSpace(role) && role.ToLower() == "admin" && n.Role.ToLower() == "admin"))
                 .ToList();
 
             foreach (var notification in notifs)
