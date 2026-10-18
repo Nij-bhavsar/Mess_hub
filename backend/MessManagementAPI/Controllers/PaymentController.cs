@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using MessManagementAPI.Data;
 using MessManagementAPI.Models;
 using System.Globalization;
+using MessManagementAPI.Services;
 
 namespace MessManagementAPI.Controllers
 {
@@ -22,10 +23,23 @@ namespace MessManagementAPI.Controllers
     public class PaymentController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly MonthlyFeeService _monthlyFeeService;
 
-        public PaymentController(AppDbContext context)
+        public PaymentController(AppDbContext context, MonthlyFeeService monthlyFeeService)
         {
             _context = context;
+            _monthlyFeeService = monthlyFeeService;
+        }
+
+        [HttpGet("monthly-fee/student/{studentId}")]
+        public IActionResult GetMonthlyFee(int studentId, [FromQuery] string? month = null)
+            => Ok(_monthlyFeeService.GetInvoice(studentId, month));
+
+        [HttpPost("monthly-fee/notify")]
+        public IActionResult SendMonthlyFeeNotifications([FromQuery] string? month = null)
+        {
+            var sent = _monthlyFeeService.SendMonthEndNotifications(month);
+            return Ok(new { message = "Month-end fee notifications processed.", sent });
         }
 
         private static DateTime GetPaymentDate(string? paidAt)

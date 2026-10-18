@@ -1,9 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using MessManagementAPI.Data;
+using MessManagementAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<MonthlyFeeService>();
+builder.Services.AddHostedService<MonthEndBillingWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

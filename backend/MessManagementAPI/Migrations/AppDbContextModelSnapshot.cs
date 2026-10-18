@@ -282,6 +282,25 @@ namespace MessManagementAPI.Migrations
                     b.ToTable("Notifications");
                 });
 
+            modelBuilder.Entity("MessManagementAPI.Models.NotificationUserState", b =>
+                {
+                    b.Property<int>("NotificationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.HasKey("NotificationId", "UserId");
+
+                    b.ToTable("NotificationUserStates");
+                });
+
             modelBuilder.Entity("MessManagementAPI.Models.Payment", b =>
                 {
                     b.Property<int>("Id")

@@ -67,6 +67,7 @@ function UnifiedNavbar() {
       { to: "/feedback-admin", label: "Feedbacks"  },
       { to: "/item-requests",  label: "Requests"   },
       { to: "/payments",       label: "Payments"   },
+      { to: "/food-prediction",label: "Food AI"    },
     ],
     staff: [
       { to: "/staff",         label: "Dashboard"  },
@@ -75,6 +76,7 @@ function UnifiedNavbar() {
       { to: "/attendance",    label: "Attendance" },
       { to: "/leave",         label: "My Leaves"  },
       { to: "/item-request",  label: "Requests"   },
+      { to: "/food-prediction",label: "Food AI"    },
     ],
     student: [
       { to: "/student",       label: "Dashboard"  },

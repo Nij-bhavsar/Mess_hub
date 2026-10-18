@@ -21,6 +21,9 @@ import Payments         from "./pages/Payments";
 import LeaveApply       from "./pages/LeaveApply";
 import LeaveAdmin       from "./pages/LeaveAdmin";
 import Notifications    from "./pages/Notifications";
+import FoodPrediction   from "./pages/FoodPrediction";
+import MessAssistant    from "./pages/MessAssistant";
+import FloatingMessAssistant from "./components/FloatingMessAssistant";
 import ProtectedRoute   from "./components/ProtectedRoute";
 import Footer           from "./components/Footer";
 import PageTransition   from "./components/PageTransition";
@@ -167,6 +170,24 @@ function App() {
                 />
 
                 <Route
+                  path="/food-prediction"
+                  element={
+                    <ProtectedRoute allowedRoles={["admin", "staff"]}>
+                      <FoodPrediction />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/mess-assistant"
+                  element={
+                    <ProtectedRoute allowedRoles={["student"]}>
+                      <MessAssistant />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
                   path="/leave"
                   element={
                     <ProtectedRoute allowedRoles={["student", "staff"]}>
@@ -195,6 +216,8 @@ function App() {
               </Routes>
             )}
           </PageTransition>
+
+          <FloatingMessAssistant />
 
           <Footer />
         </>

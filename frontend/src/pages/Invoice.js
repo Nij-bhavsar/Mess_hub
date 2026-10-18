@@ -154,18 +154,24 @@ function Invoice() {
   const [showReceipt,   setShowReceipt]   = useState(null);
   const [processing,    setProcessing]    = useState(false);
   const [error,         setError]         = useState("");
+  const [feeInvoice,    setFeeInvoice]    = useState(null);
 
-  const plan  = MESS_PLANS.find(p => p.id === selectedPlan);
-  const gst   = Math.round(plan.amount * 0.05);
-  const total = plan.amount + gst;
-  const currentMonthPayment = receipts.find(isPaidForCurrentMonth);
+  const fallbackPlan = MESS_PLANS.find(p => p.id === selectedPlan);
+  const plan = feeInvoice ? { id:"attendance", label:`${feeInvoice.monthLabel} attendance fee`, amount:Number(feeInvoice.subtotal), meals:`${feeInvoice.foodDays} food days × ${formatCurrency(feeInvoice.dailyRate)} per day`, popular:true } : fallbackPlan;
+  const gst   = feeInvoice ? Number(feeInvoice.gst) : Math.round(plan.amount * 0.05);
+  const total = feeInvoice ? Number(feeInvoice.total) : plan.amount + gst;
+  const currentMonthPayment = feeInvoice?.status === "Paid" ? { paidAt:new Date().toISOString() } : receipts.find(isPaidForCurrentMonth);
 
   /* Load past payments from backend */
   useEffect(() => {
     const load = async () => {
       try {
         const res = await fetch(`http://localhost:5155/api/payment/student/${studentId}`);
-        if (res.ok) { setReceipts(await res.json()); return; }
+        if (res.ok) setReceipts(await res.json());
+      } catch {}
+      try {
+        const invoiceRes = await fetch(`http://localhost:5155/api/payment/monthly-fee/student/${studentId}`);
+        if (invoiceRes.ok) setFeeInvoice(await invoiceRes.json());
       } catch {}
       try {
         const stored = JSON.parse(localStorage.getItem(`receipts_${studentId}`) || "[]");
@@ -356,7 +362,7 @@ function Invoice() {
                 <span style={{ fontSize:"var(--text-base)", fontWeight:"var(--font-bold)", color:"var(--color-text-primary)" }}>Choose Your Plan</span>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"var(--space-3)" }}>
-                {MESS_PLANS.map(p => (
+                {(feeInvoice ? [plan] : MESS_PLANS).map(p => (
                   <div key={p.id} onClick={() => setSelectedPlan(p.id)} style={{
                     padding:"var(--space-4)", borderRadius:"var(--radius-lg)", cursor:"pointer", position:"relative",
                     border: selectedPlan===p.id ? "2px solid var(--color-brand-primary)" : "1.5px solid var(--color-border)",
@@ -373,6 +379,14 @@ function Invoice() {
                   </div>
                 ))}
               </div>
+              {feeInvoice && (
+                <div style={{ marginTop:"var(--space-4)", padding:"var(--space-4)", borderRadius:"var(--radius-lg)", background:"#F0FDF4", border:"1px solid #BBF7D0" }}>
+                  <strong style={{ color:"#166534" }}>Day-wise meal fee</strong>
+                  <div style={{ fontSize:"var(--text-sm)", marginTop:"6px", color:"var(--color-text-secondary)" }}>You are charged only for days marked Present in attendance.</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:"6px", marginTop:"var(--space-3)" }}>{feeInvoice.attendanceDates.map(day => <span key={day} style={{ background:"white", border:"1px solid #BBF7D0", borderRadius:"999px", padding:"4px 8px", fontSize:"11px", color:"#166534" }}>{day}</span>)}</div>
+                  {feeInvoice.foodDays === 0 && <div style={{ fontSize:"var(--text-sm)", marginTop:"8px", color:"#166534" }}>No present meal days recorded for this month.</div>}
+                </div>
+              )}
             </div>
 
             {/* Step 2 — Payment method */}

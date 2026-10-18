@@ -23,8 +23,16 @@ namespace MessManagementAPI.Data
         
         public DbSet<Notification> Notifications { get; set; }
 
+        public DbSet<NotificationUserState> NotificationUserStates { get; set; }
+
         public DbSet<FeedbackEntry>    Feedbacks      { get; set; }
 
         public DbSet<ItemRequestEntry> ItemRequests   { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<NotificationUserState>()
+                .HasKey(state => new { state.NotificationId, state.UserId });
+        }
     }
 }

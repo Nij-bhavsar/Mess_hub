@@ -44,6 +44,15 @@ const STATUS_PILL = {
 
 const ACTION_CARDS = [
   {
+    title: "Food AI Planner",
+    desc: "Predict student demand, food choices, and purchase quantities",
+    link: "/food-prediction",
+    label: "Plan Meals",
+    icon: "🤖",
+    accent: "linear-gradient(135deg,#7C3AED 0%,#A855F7 100%)",
+    accentLight: "#F5F3FF",
+  },
+  {
     title: "Student List",
     desc: "View and manage all registered students",
     link: "/students",

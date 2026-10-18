@@ -122,7 +122,7 @@ function Notifications() {
 
   const markRead = async (id) => {
     try {
-      await fetch(`${BASE}/${id}/read`, { method:"PUT" });
+      await fetch(`${BASE}/${id}/read?userId=${userId}`, { method:"PUT" });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead:true } : n));
     } catch {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead:true } : n));
@@ -131,7 +131,7 @@ function Notifications() {
 
   const markAllRead = async () => {
     try {
-      await fetch(`${BASE}/read-all?userId=${userId}`, { method:"PUT" });
+      await fetch(`${BASE}/read-all?userId=${userId}&role=${userRole}`, { method:"PUT" });
       setNotifications(prev => prev.map(n => ({ ...n, isRead:true })));
     } catch {
       setNotifications(prev => prev.map(n => ({ ...n, isRead:true })));
@@ -140,7 +140,7 @@ function Notifications() {
 
   const deleteNotif = async (id) => {
     try {
-      await fetch(`${BASE}/${id}`, { method:"DELETE" });
+      await fetch(`${BASE}/${id}?userId=${userId}`, { method:"DELETE" });
       setNotifications(prev => prev.filter(n => n.id !== id));
     } catch {
       setNotifications(prev => prev.filter(n => n.id !== id));

@@ -45,16 +45,27 @@ namespace MessManagementAPI.Controllers
                 query = query.Where(n => n.UserId == userId.Value || n.UserId == 0);
             }
 
-            var result = query
+            var notifications = query
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(50)
+                .ToList();
+
+            var states = userId.HasValue
+                ? _context.NotificationUserStates
+                    .Where(state => state.UserId == userId.Value &&
+                        notifications.Select(notification => notification.Id).Contains(state.NotificationId))
+                    .ToDictionary(state => state.NotificationId)
+                : new Dictionary<int, NotificationUserState>();
+
+            var result = notifications
+                .Where(notification => !states.TryGetValue(notification.Id, out var state) || !state.IsDeleted)
                 .Select(n => new {
                     id        = n.Id,
                     userId    = n.UserId,
                     title     = n.Title,
                     message   = n.Message,
                     type      = n.Type,
-                    isRead    = n.IsRead,
+                    isRead    = states.TryGetValue(n.Id, out var state) ? state.IsRead : n.IsRead,
                     createdAt = n.CreatedAt,
                     role      = n.Role,
                 }).ToList();
@@ -73,40 +84,60 @@ namespace MessManagementAPI.Controllers
             if (userId.HasValue && !string.IsNullOrWhiteSpace(role))
             {
                 query = query.Where(n =>
-                    (n.UserId == userId.Value || (n.UserId == 0 && (n.Role == role.ToLower() || n.Role == ""))) &&
-                    !n.IsRead
+                    n.UserId == userId.Value || (n.UserId == 0 && (n.Role == role.ToLower() || n.Role == ""))
                 );
             }
             else if (userId.HasValue)
             {
-                query = query.Where(n => (n.UserId == userId.Value || n.UserId == 0) && !n.IsRead);
+                query = query.Where(n => n.UserId == userId.Value || n.UserId == 0);
             }
 
-            return Ok(new { count = query.Count() });
+            if (!userId.HasValue)
+                return Ok(new { count = query.Count() });
+
+            var notifications = query.ToList();
+            var states = _context.NotificationUserStates
+                .Where(state => state.UserId == userId.Value &&
+                    notifications.Select(notification => notification.Id).Contains(state.NotificationId))
+                .ToDictionary(state => state.NotificationId);
+
+            var count = notifications.Count(notification =>
+            {
+                states.TryGetValue(notification.Id, out var state);
+                return (state == null || !state.IsDeleted) && !(state?.IsRead ?? notification.IsRead);
+            });
+
+            return Ok(new { count });
         }
 
         // PUT /api/notification/{id}/read — mark single notification as read
         [HttpPut("{id}/read")]
-        public IActionResult MarkRead(int id)
+        public IActionResult MarkRead(int id, [FromQuery] int userId)
         {
             var notif = _context.Notifications.FirstOrDefault(n => n.Id == id);
             if (notif == null)
                 return NotFound();
 
-            notif.IsRead = true;
+            var state = GetOrCreateState(id, userId);
+            state.IsRead = true;
             _context.SaveChanges();
             return Ok(new { message = "Marked as read." });
         }
 
         // PUT /api/notification/read-all?userId=X — mark all as read
         [HttpPut("read-all")]
-        public IActionResult MarkAllRead([FromQuery] int userId)
+        public IActionResult MarkAllRead([FromQuery] int userId, [FromQuery] string? role = null)
         {
             var notifs = _context.Notifications
-                .Where(n => n.UserId == userId || n.UserId == 0)
+                .Where(n => n.UserId == userId ||
+                    (n.UserId == 0 && (string.IsNullOrWhiteSpace(role) || n.Role == role.ToLower() || n.Role == "")))
                 .ToList();
 
-            notifs.ForEach(n => n.IsRead = true);
+            foreach (var notification in notifs)
+            {
+                var state = GetOrCreateState(notification.Id, userId);
+                state.IsRead = true;
+            }
             _context.SaveChanges();
 
             return Ok(new { message = "All marked as read.", count = notifs.Count });
@@ -138,15 +169,29 @@ namespace MessManagementAPI.Controllers
 
         // DELETE /api/notification/{id}
         [HttpDelete("{id}")]
-        public IActionResult DeleteNotification(int id)
+        public IActionResult DeleteNotification(int id, [FromQuery] int userId)
         {
             var notif = _context.Notifications.FirstOrDefault(n => n.Id == id);
             if (notif == null)
                 return NotFound();
 
-            _context.Notifications.Remove(notif);
+            var state = GetOrCreateState(id, userId);
+            state.IsDeleted = true;
             _context.SaveChanges();
-            return Ok(new { message = "Deleted." });
+            return Ok(new { message = "Deleted for this user." });
+        }
+
+        private NotificationUserState GetOrCreateState(int notificationId, int userId)
+        {
+            var state = _context.NotificationUserStates
+                .FirstOrDefault(s => s.NotificationId == notificationId && s.UserId == userId);
+
+            if (state != null)
+                return state;
+
+            state = new NotificationUserState { NotificationId = notificationId, UserId = userId };
+            _context.NotificationUserStates.Add(state);
+            return state;
         }
     }
 }
